@@ -1,0 +1,99 @@
+// LCD stuff
+#include <Wire.h>
+#include <LCD.h>
+#include <LiquidCrystal_I2C.h>
+#define I2C_ADDR 0x38 //Define I2C Address where the PCF8574A is
+#define BACKLIGHT_PIN 3
+#define En_pin 2
+#define Rw_pin 1
+#define Rs_pin 0
+#define D4_pin 4
+#define D5_pin 5
+#define D6_pin 6
+#define D7_pin 7
+LiquidCrystal_I2C lcd(I2C_ADDR, En_pin,Rw_pin,Rs_pin,D4_pin,D5_pin,D6_pin,D7_pin);
+// LCD stuff END
+
+//tempSensor
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#define ONE_WIRE_BUS D3
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature sensors(&oneWire);
+
+#include <ESP8266WiFi.h>
+#include <ESP8266WiFiMulti.h>
+ESP8266WiFiMulti WiFiMulti;
+const char* ssid     = "SSID";
+const char* password = "PASSWORD";
+const char* host = "SERVER_IP";
+
+String line = "";
+String wait = "Wait";
+
+void setup() {
+  lcd.begin (16,2);
+  lcd.setBacklightPin(BACKLIGHT_PIN,POSITIVE);
+  lcd.setBacklight(HIGH);
+  Serial.begin(115200);
+
+  //tempSensor
+  sensors.begin();
+
+  WiFiMulti.addAP(ssid, password);
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    //Serial.print(".");
+    lcd.setCursor(0,0);
+    lcd.print(wait);
+  }
+
+  // Report success
+  Serial.println("");
+  Serial.print("Connected to wifi with IP ");  
+  Serial.println(WiFi.localIP());
+}
+
+void loop() {  
+
+// get http
+// Connect to the site defined in "host" on port 80
+  WiFiClient client;
+  if (!client.connect(host, 80)) {
+    Serial.println("Connection failed");
+  }
+
+  Serial.println("Connected to host - sending request...");
+  
+  client.print(String("GET /helsinkiTemp HTTP/1.1\r\n") +
+               "Host: " + host + "\r\n" + 
+               "Connection: close\r\n\r\n");
+
+  Serial.println("Request sent - waiting for reply...");
+
+  delay(2500);
+  
+  // Read the entire response and flush it to Serial output
+  while(client.available()){
+    line = client.readStringUntil('\n');
+    Serial.print(line);
+  }
+
+  Serial.println();
+  Serial.println("Connection closed.");
+  // end get http
+
+  sensors.requestTemperatures();
+  float inTemp = sensors.getTempCByIndex(0);
+  lcd.setCursor(0,1);
+  lcd.print("In: ");
+  lcd.setCursor(4,1);
+  lcd.print(inTemp);
+  
+  lcd.setCursor(0,0);
+  lcd.print("Out: " + line);
+  delay(60000);
+}
